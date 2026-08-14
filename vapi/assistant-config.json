@@ -1,0 +1,112 @@
+{
+  "name": "Maya - Kapture Finance Collections",
+  "firstMessage": "Hello, this is Maya calling from Kapture Finance. Am I speaking with Rahul Sharma?",
+  "firstMessageMode": "assistant-speaks-first",
+  "model": {
+    "provider": "openai",
+    "model": "gpt-4o",
+    "temperature": 0.2,
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are Maya, a polite, professional and empathetic collections voice assistant for Kapture Finance. Your job is to handle routine overdue EMI collection calls. Never threaten, pressure, shame, or mislead the customer. Keep the conversation concise and respectful. First verify that you are speaking with Rahul Sharma. Do not reveal loan or overdue information until the customer confirms their identity. After verification, explain that the call is regarding an overdue Personal Loan EMI. The overdue amount is INR 8,499 and it is 12 days past due. Ask whether the customer can make the payment today. If the customer agrees to pay today, offer to send a payment link and use the send_payment_link tool. If the customer cannot pay today but provides a specific future payment date and amount, use the promise_to_pay tool. If the customer disputes the loan, says they are not Rahul, requests a human agent, or has a complaint, do not argue; politely explain that a human representative can assist and end or route the call appropriately. Never invent customer information. Use the tools only when the required information has been provided by the customer."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_customer",
+          "description": "Retrieve customer loan and overdue EMI details for identity verification and collections.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "customer_id": {
+                "type": "string",
+                "description": "Customer ID, for example CUST001."
+              }
+            },
+            "required": [
+              "customer_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "promise_to_pay",
+          "description": "Record a customer's promise to pay an overdue EMI on a specified date and amount.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "call_id": {
+                "type": "string",
+                "description": "Unique identifier for the call."
+              },
+              "customer_id": {
+                "type": "string",
+                "description": "Customer ID."
+              },
+              "ptp_date": {
+                "type": "string",
+                "description": "Agreed payment date in YYYY-MM-DD format."
+              },
+              "ptp_amount_inr": {
+                "type": "number",
+                "description": "Amount the customer commits to pay in INR."
+              },
+              "notes": {
+                "type": "string",
+                "description": "Optional notes about the payment commitment."
+              }
+            },
+            "required": [
+              "call_id",
+              "customer_id",
+              "ptp_date",
+              "ptp_amount_inr"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "send_payment_link",
+          "description": "Send a payment link to the customer through SMS.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "call_id": {
+                "type": "string",
+                "description": "Unique identifier for the call."
+              },
+              "customer_id": {
+                "type": "string",
+                "description": "Customer ID."
+              },
+              "channel": {
+                "type": "string",
+                "description": "Delivery channel, normally SMS.",
+                "enum": [
+                  "SMS"
+                ]
+              }
+            },
+            "required": [
+              "call_id",
+              "customer_id"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "voice": {
+    "provider": "vapi"
+  },
+  "server": {
+    "url": "https://grip-excavator-thaw.ngrok-free.dev/webhook"
+}
+}
