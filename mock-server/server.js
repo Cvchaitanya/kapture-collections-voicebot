@@ -5,594 +5,364 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// ========================================
-// CUSTOMER DATA
-// ========================================
+/* =========================================================
+   MOCK CUSTOMER DATABASE
+   ========================================================= */
 
-const CUSTOMER = {
-  customer_id: "CUST001",
-  name: "Rahul Sharma",
-  loan_type: "Personal Loan",
-  overdue_emi_inr: 8499,
-  days_past_due: 12
+const customers = {
+  CUST001: {
+    customer_id: "CUST001",
+    customer_name: "Rahul Sharma",
+    loan_type: "Personal Loan",
+    overdue_amount: 8499,
+    days_past_due: 12,
+    verification_codes: ["1234", "1995"],
+  },
 };
 
-// Demo verification code
-const VERIFICATION_CODE = "1234";
-
-// ========================================
-// HELPER FUNCTIONS
-// ========================================
+/* =========================================================
+   HELPERS
+   ========================================================= */
 
 function normalizeCustomerId(value) {
-  return String(value ?? "")
+  if (!value) return "";
+
+  return String(value)
     .trim()
     .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "");
+    .replace(/\s+/g, "");
 }
 
-function normalizeVerificationCode(value) {
-  return String(value ?? "")
-    .trim()
-    .replace(/\D/g, "");
+function parseArguments(args) {
+  if (!args) return {};
+
+  if (typeof args === "string") {
+    try {
+      return JSON.parse(args);
+    } catch (error) {
+      console.log("Could not parse tool arguments:", args);
+      return {};
+    }
+  }
+
+  return args;
 }
 
-// ========================================
-// HEALTH CHECK
-// ========================================
+function createToolResponse(toolCallId, result) {
+  return {
+    results: [
+      {
+        toolCallId: toolCallId,
+        result: JSON.stringify(result),
+      },
+    ],
+  };
+}
+
+/* =========================================================
+   HEALTH CHECK
+   ========================================================= */
 
 app.get("/", (req, res) => {
-  res.json({
-    success: true,
-    message: "Kapture Finance Mock Server is running"
+  res.status(200).json({
+    status: "ok",
+    service: "Kapture Finance Mock Collections Server",
+    webhook: "/webhook",
+    timestamp: new Date().toISOString(),
   });
 });
 
-// ========================================
-// VERIFY CUSTOMER
-// ========================================
-
-app.post("/verify-customer", (req, res) => {
-  const {
-    call_id,
-    customer_id,
-    verification_code
-  } = req.body || {};
-
-  const normalizedCustomerId =
-    normalizeCustomerId(customer_id);
-
-  const normalizedVerificationCode =
-    normalizeVerificationCode(verification_code);
-
-  console.log("========================================");
-  console.log("VERIFY CUSTOMER");
-  console.log("call_id:", call_id);
-  console.log("customer_id received:", customer_id);
-  console.log("customer_id normalized:", normalizedCustomerId);
-  console.log("verification_code received:", verification_code);
-  console.log(
-    "verification_code normalized:",
-    normalizedVerificationCode
-  );
-  console.log(
-    "expected verification code:",
-    VERIFICATION_CODE
-  );
-  console.log("========================================");
-
-  if (!call_id || !customer_id || !verification_code) {
-    return res.status(400).json({
-      success: false,
-      status: "FAILED",
-      message: "Missing required fields"
-    });
-  }
-
-  const verified =
-    normalizedCustomerId === CUSTOMER.customer_id &&
-    normalizedVerificationCode === VERIFICATION_CODE;
-
-  if (verified) {
-    console.log("CUSTOMER VERIFIED");
-
-    return res.json({
-      success: true,
-      status: "VERIFIED",
-      customer: CUSTOMER
-    });
-  }
-
-  console.log("CUSTOMER VERIFICATION FAILED");
-
-  return res.json({
-    success: false,
-    status: "FAILED",
-    message: "Customer verification failed"
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy",
+    server: "kapture-collections-voicebot",
+    timestamp: new Date().toISOString(),
   });
 });
 
-// ========================================
-// LOG PAYMENT COMMITMENT
-// ========================================
-
-app.post("/log-payment-commitment", (req, res) => {
-  const {
-    call_id,
-    customer_id,
-    payment_date,
-    payment_amount,
-    notes
-  } = req.body || {};
-
-  if (!call_id || !customer_id || !payment_date) {
-    return res.status(400).json({
-      success: false,
-      message: "Missing required fields"
-    });
-  }
-
-  console.log("========================================");
-  console.log("PAYMENT COMMITMENT");
-  console.log("call_id:", call_id);
-  console.log("customer_id:", customer_id);
-  console.log("payment_date:", payment_date);
-  console.log("payment_amount:", payment_amount);
-  console.log("notes:", notes);
-  console.log("========================================");
-
-  return res.json({
-    success: true,
-    message: "Payment commitment recorded successfully",
-    commitment: {
-      call_id,
-      customer_id,
-      payment_date,
-      payment_amount: payment_amount ?? null,
-      notes: notes || ""
-    }
-  });
-});
-
-// ========================================
-// LOG PROMISE TO PAY
-// ========================================
-
-app.post("/log-promise-to-pay", (req, res) => {
-  const {
-    call_id,
-    customer_id,
-    ptp_date,
-    ptp_amount_inr,
-    notes
-  } = req.body || {};
-
-  if (!call_id || !customer_id || !ptp_date) {
-    return res.status(400).json({
-      success: false,
-      message: "Missing required fields"
-    });
-  }
-
-  console.log("Promise to Pay:", {
-    call_id,
-    customer_id,
-    ptp_date,
-    ptp_amount_inr,
-    notes
-  });
-
-  return res.json({
-    success: true,
-    message: "Promise-to-Pay recorded successfully",
-    ptp: {
-      call_id,
-      customer_id,
-      ptp_date,
-      ptp_amount_inr: ptp_amount_inr ?? null,
-      notes: notes || ""
-    }
-  });
-});
-
-// ========================================
-// SEND PAYMENT LINK
-// ========================================
-
-app.post("/send-payment-link", (req, res) => {
-  const {
-    call_id,
-    customer_id,
-    channel = "SMS"
-  } = req.body || {};
-
-  if (!call_id || !customer_id) {
-    return res.status(400).json({
-      success: false,
-      message: "Missing required fields"
-    });
-  }
-
-  const paymentLink =
-    `https://pay.kapturefinance.com/pay/${customer_id}`;
-
-  console.log("Payment link requested:", {
-    call_id,
-    customer_id,
-    channel
-  });
-
-  return res.json({
-    success: true,
-    message: "Payment link sent successfully",
-    payment_link: paymentLink,
-    channel
-  });
-});
-
-// ========================================
-// ESCALATE TO AGENT
-// ========================================
-
-app.post("/escalate-to-agent", (req, res) => {
-  const {
-    call_id,
-    customer_id,
-    reason,
-    notes
-  } = req.body || {};
-
-  if (!call_id || !customer_id || !reason) {
-    return res.status(400).json({
-      success: false,
-      message: "Missing required fields"
-    });
-  }
-
-  console.log("Escalation:", {
-    call_id,
-    customer_id,
-    reason,
-    notes
-  });
-
-  return res.json({
-    success: true,
-    message: "Escalation recorded successfully",
-    escalation: {
-      call_id,
-      customer_id,
-      reason,
-      notes: notes || ""
-    }
-  });
-});
-
-// ========================================
-// MARK DISPOSITION
-// ========================================
-
-app.post("/mark-disposition", (req, res) => {
-  const {
-    call_id,
-    customer_id,
-    status,
-    notes
-  } = req.body || {};
-
-  if (!call_id || !customer_id || !status) {
-    return res.status(400).json({
-      success: false,
-      message: "Missing required fields"
-    });
-  }
-
-  console.log("Disposition:", {
-    call_id,
-    customer_id,
-    status,
-    notes
-  });
-
-  return res.json({
-    success: true,
-    message: "Disposition recorded successfully",
-    disposition: {
-      call_id,
-      customer_id,
-      status,
-      notes: notes || ""
-    }
-  });
-});
-
-// ========================================
-// VAPI WEBHOOK
-// ========================================
+/* =========================================================
+   VAPI WEBHOOK
+   ========================================================= */
 
 app.post("/webhook", (req, res) => {
-  console.log("\n========================================");
-  console.log("VAPI WEBHOOK RECEIVED");
-  console.log("========================================");
+  try {
+    console.log("\n========================================");
+    console.log("VAPI REQUEST RECEIVED");
+    console.log("========================================");
 
-  console.log(
-    JSON.stringify(req.body, null, 2)
-  );
+    console.log("Request body:");
+    console.log(JSON.stringify(req.body, null, 2));
 
-  const message = req.body?.message;
+    const message = req.body?.message;
 
-  // Ignore non-tool messages
-  if (!message || message.type !== "tool-calls") {
-    return res.json({
-      success: true
+    /* -------------------------------------------------------
+       VAPI TOOL CALLS
+       ------------------------------------------------------- */
+
+    if (message && message.type === "tool-calls") {
+      const toolCalls = message.toolCalls || [];
+
+      if (!toolCalls.length) {
+        return res.status(200).json({
+          status: "no_tool_calls",
+        });
+      }
+
+      const results = [];
+
+      for (const toolCall of toolCalls) {
+        const toolCallId = toolCall.id;
+
+        const functionData = toolCall.function || {};
+
+        const toolName = functionData.name;
+
+        const args = parseArguments(functionData.arguments);
+
+        console.log("\n----------------------------------------");
+        console.log("TOOL:", toolName);
+        console.log("ARGUMENTS:", args);
+        console.log("----------------------------------------");
+
+        let result;
+
+        /* =====================================================
+           VERIFY CUSTOMER
+           ===================================================== */
+
+        if (toolName === "verify_customer") {
+          const customerId = normalizeCustomerId(
+            args.customer_id || args.account_id
+          );
+
+          const verificationCode = String(
+            args.verification_code || ""
+          ).trim();
+
+          console.log("Customer ID:", customerId);
+          console.log("Verification Code:", verificationCode);
+
+          const customer = customers[customerId];
+
+          if (!customer) {
+            result = {
+              verified: false,
+              success: false,
+              message: "Customer record not found.",
+            };
+          } else if (
+            customer.verification_codes.includes(verificationCode)
+          ) {
+            result = {
+              verified: true,
+              success: true,
+              customer_id: customer.customer_id,
+              customer_name: customer.customer_name,
+              message: "Identity verified successfully.",
+            };
+          } else {
+            result = {
+              verified: false,
+              success: false,
+              message: "Verification failed. Incorrect verification code.",
+            };
+          }
+        }
+
+        /* =====================================================
+           LOG PAYMENT COMMITMENT
+           ===================================================== */
+
+        else if (
+          toolName === "log_payment_commitment" ||
+          toolName === "log_promise_to_pay"
+        ) {
+          const customerId = normalizeCustomerId(
+            args.customer_id || args.account_id
+          );
+
+          const customer = customers[customerId];
+
+          const amount = Number(
+            args.amount || args.payment_amount || 0
+          );
+
+          const ptpDate =
+            args.ptp_date ||
+            args.payment_date ||
+            args.commitment_date ||
+            "";
+
+          if (!customer) {
+            result = {
+              success: false,
+              message: "Customer record not found.",
+            };
+          } else if (!ptpDate) {
+            result = {
+              success: false,
+              message: "Payment commitment date is required.",
+            };
+          } else if (!amount || amount <= 0) {
+            result = {
+              success: false,
+              message: "Valid payment amount is required.",
+            };
+          } else {
+            const ptpId =
+              "PTP-" +
+              Math.floor(1000 + Math.random() * 9000);
+
+            result = {
+              success: true,
+              status: "SUCCESS",
+              ptp_id: ptpId,
+              customer_id: customerId,
+              confirmed_date: ptpDate,
+              amount: amount,
+              message:
+                "Payment commitment recorded successfully.",
+              timestamp: new Date().toISOString(),
+            };
+
+            console.log("\nPAYMENT COMMITMENT SAVED");
+            console.log("PTP ID:", ptpId);
+            console.log("Customer:", customerId);
+            console.log("Amount:", amount);
+            console.log("Date:", ptpDate);
+          }
+        }
+
+        /* =====================================================
+           END OUTBOUND CALL
+           ===================================================== */
+
+        else if (
+          toolName === "end_outbound_call" ||
+          toolName === "endCall"
+        ) {
+          result = {
+            success: true,
+            message: "Outbound call ended successfully.",
+          };
+
+          console.log("Outbound call termination requested.");
+        }
+
+        /* =====================================================
+           OPTIONAL: SEND PAYMENT LINK
+           ===================================================== */
+
+        else if (toolName === "send_payment_link") {
+          const customerId = normalizeCustomerId(
+            args.customer_id || args.account_id
+          );
+
+          const channel = args.channel || "SMS";
+
+          result = {
+            success: true,
+            customer_id: customerId,
+            channel: channel,
+            link_sent: true,
+            message:
+              `Payment link sent successfully via ${channel}.`,
+            timestamp: new Date().toISOString(),
+          };
+
+          console.log(
+            `Payment link sent via ${channel} to ${customerId}`
+          );
+        }
+
+        /* =====================================================
+           OPTIONAL: MARK DISPOSITION
+           ===================================================== */
+
+        else if (toolName === "mark_disposition") {
+          const customerId = normalizeCustomerId(
+            args.customer_id || args.account_id
+          );
+
+          result = {
+            success: true,
+            customer_id: customerId,
+            disposition_logged: args.status || "UNKNOWN",
+            notes: args.notes || "",
+            timestamp: new Date().toISOString(),
+          };
+
+          console.log(
+            "Disposition:",
+            args.status || "UNKNOWN"
+          );
+        }
+
+        /* =====================================================
+           UNKNOWN TOOL
+           ===================================================== */
+
+        else {
+          console.log("UNKNOWN TOOL:", toolName);
+
+          result = {
+            success: false,
+            message: `Unknown tool: ${toolName}`,
+          };
+        }
+
+        results.push({
+          toolCallId: toolCallId,
+          result: JSON.stringify(result),
+        });
+      }
+
+      console.log("\n========================================");
+      console.log("VAPI RESPONSE");
+      console.log("========================================");
+      console.log(JSON.stringify(results, null, 2));
+
+      return res.status(200).json({
+        results: results,
+      });
+    }
+
+    /* -------------------------------------------------------
+       OTHER VAPI EVENTS
+       ------------------------------------------------------- */
+
+    console.log("Non-tool Vapi event received.");
+
+    return res.status(200).json({
+      status: "acknowledged",
+    });
+  } catch (error) {
+    console.error("\n========================================");
+    console.error("WEBHOOK ERROR");
+    console.error("========================================");
+    console.error(error);
+
+    return res.status(500).json({
+      success: false,
+      error: error.message,
     });
   }
-
-  const toolCallList =
-    message.toolCallList ||
-    message.toolCalls ||
-    [];
-
-  const results = toolCallList.map((toolCall) => {
-
-    const id =
-      toolCall.id ||
-      toolCall.toolCallId;
-
-    const name =
-      toolCall.name ||
-      toolCall.function?.name;
-
-    // ========================================
-    // IMPORTANT:
-    // Vapi may send function.arguments as a
-    // JSON STRING instead of an object.
-    // Parse it before accessing parameters.
-    // ========================================
-
-    let parameters =
-      toolCall.parameters ||
-      toolCall.function?.arguments ||
-      {};
-
-    if (typeof parameters === "string") {
-      try {
-        parameters = JSON.parse(parameters);
-      } catch (error) {
-        console.log(
-          "Failed to parse tool arguments:",
-          parameters
-        );
-
-        parameters = {};
-      }
-    }
-
-    console.log("\n----------------------------------------");
-    console.log("TOOL:", name);
-    console.log("ID:", id);
-    console.log("PARAMETERS:", parameters);
-    console.log("----------------------------------------");
-
-    let result;
-
-    // ======================================
-    // VERIFY CUSTOMER
-    // ======================================
-
-    if (name === "verify_customer") {
-
-      const customerId =
-        normalizeCustomerId(
-          parameters.customer_id
-        );
-
-      const verificationCode =
-        normalizeVerificationCode(
-          parameters.verification_code
-        );
-
-      console.log("\nVERIFY DEBUG");
-      console.log(
-        "Customer ID:",
-        customerId
-      );
-
-      console.log(
-        "Verification Code:",
-        verificationCode
-      );
-
-      console.log(
-        "Expected Code:",
-        VERIFICATION_CODE
-      );
-
-      const verified =
-        customerId === CUSTOMER.customer_id &&
-        verificationCode === VERIFICATION_CODE;
-
-      if (verified) {
-
-        console.log(
-          "VERIFY CUSTOMER SUCCESS"
-        );
-
-        result = {
-          success: true,
-          status: "VERIFIED",
-          customer: CUSTOMER
-        };
-
-      } else {
-
-        console.log(
-          "VERIFY CUSTOMER FAILED"
-        );
-
-        result = {
-          success: false,
-          status: "FAILED",
-          message: "Customer verification failed"
-        };
-      }
-    }
-
-    // ======================================
-    // LOG PAYMENT COMMITMENT
-    // ======================================
-
-    else if (
-      name === "log_payment_commitment"
-    ) {
-
-      console.log(
-        "PAYMENT COMMITMENT LOGGED"
-      );
-
-      result = {
-        success: true,
-        message:
-          "Payment commitment recorded successfully",
-        commitment: parameters
-      };
-    }
-
-    // ======================================
-    // LOG PROMISE TO PAY
-    // ======================================
-
-    else if (
-      name === "log_promise_to_pay"
-    ) {
-
-      console.log(
-        "PROMISE TO PAY LOGGED"
-      );
-
-      result = {
-        success: true,
-        message:
-          "Promise-to-Pay recorded successfully",
-        ptp: parameters
-      };
-    }
-
-    // ======================================
-    // SEND PAYMENT LINK
-    // ======================================
-
-    else if (
-      name === "send_payment_link"
-    ) {
-
-      const customerId =
-        parameters.customer_id ||
-        parameters.account_id ||
-        CUSTOMER.customer_id;
-
-      const channel =
-        parameters.channel || "SMS";
-
-      result = {
-        success: true,
-        message:
-          "Payment link sent successfully",
-        payment_link:
-          `https://pay.kapturefinance.com/pay/${customerId}`,
-        channel
-      };
-    }
-
-    // ======================================
-    // ESCALATE TO AGENT
-    // ======================================
-
-    else if (
-      name === "escalate_to_agent"
-    ) {
-
-      result = {
-        success: true,
-        message:
-          "Escalation recorded successfully",
-        escalation: parameters
-      };
-    }
-
-    // ======================================
-    // MARK DISPOSITION
-    // ======================================
-
-    else if (
-      name === "mark_disposition"
-    ) {
-
-      result = {
-        success: true,
-        message:
-          "Disposition recorded successfully",
-        disposition: parameters
-      };
-    }
-
-    // ======================================
-    // UNKNOWN TOOL
-    // ======================================
-
-    else {
-
-      console.log(
-        "UNKNOWN TOOL:",
-        name
-      );
-
-      result = {
-        success: false,
-        message: `Unknown tool: ${name}`
-      };
-    }
-
-    return {
-      name,
-      toolCallId: id,
-      result: JSON.stringify(result)
-    };
-  });
-
-  console.log("\n========================================");
-  console.log("VAPI RESPONSE");
-  console.log(
-    JSON.stringify(results, null, 2)
-  );
-  console.log("========================================\n");
-
-  return res.json({
-    results
-  });
 });
 
-// ========================================
-// START SERVER
-// ========================================
+/* =========================================================
+   START SERVER
+   ========================================================= */
 
 app.listen(PORT, () => {
-  console.log("");
-  console.log("========================================");
+  console.log("\n========================================");
   console.log("KAPTURE FINANCE MOCK SERVER");
   console.log("========================================");
-
-  console.log(
-    `Server running at http://localhost:${PORT}`
-  );
-
-  console.log(
-    "Verification Code: 1234"
-  );
-
-  console.log(
-    "Customer ID: CUST001"
-  );
-
-  console.log("========================================");
+  console.log(`Server running at: http://localhost:${PORT}`);
+  console.log(`Webhook endpoint: http://localhost:${PORT}/webhook`);
+  console.log(`Health endpoint: http://localhost:${PORT}/health`);
+  console.log("----------------------------------------");
+  console.log("Verification Code: 1234");
+  console.log("Customer ID: CUST001");
+  console.log("Customer: Rahul Sharma");
+  console.log("========================================\n");
 });
